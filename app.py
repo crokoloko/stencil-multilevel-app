@@ -4,144 +4,153 @@ import numpy as np
 from PIL import Image
 
 # ==========================================
-# 1. Configurazione e Stile "Candy Pop" (CSS)
+# 1. Configurazione e Stile Space & Neon
 # ==========================================
-st.set_page_config(
-    page_title="Stencil Pop Art Maker",
-    layout="wide",
-)
+st.set_page_config(page_title="Stencil Space Lab", layout="centered")
 
-# --- CSS PERSONALIZZATO (Stile Allegro e Vibrante) ---
-pop_art_css = """
+space_css = """
 <style>
-    /* 1. Sfondo e Testo */
+    /* Sfondo nero stellato (CSS puro) */
     .stApp {
-        background-color: #FFDE59; /* Giallo brillante */
-        color: #333333;
-        font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        background-color: #000000;
+        background-image: 
+            radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+            radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+            radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px);
+        background-size: 550px 550px, 350px 350px, 250px 250px;
+        color: #00FFD1; /* Turchese Neon */
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
 
-    /* 2. Titoli (Stile Bold & Fun) */
-    @import url('https://fonts.googleapis.com/css2?family=Bungee&display=swap');
-    
+    /* Rimuovi Sidebar e Menu Streamlit */
+    [data-testid="stSidebar"], section[data-testid="stSidebarNav"] {
+        display: none;
+    }
+
+    /* Titoli Neon */
     h1, h2, h3 {
-        font-family: 'Bungee', cursive !important;
-        color: #FF5757 !important; /* Rosso corallo */
-        text-shadow: 3px 3px 0px #5271FF; /* Ombra azzurra "pop" */
+        color: #FF00FF !important; /* Magenta Neon */
+        text-shadow: 0 0 10px #FF00FF, 0 0 20px #FF00FF;
         text-align: center;
+        text-transform: uppercase;
     }
 
-    /* 3. Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #5271FF !important; /* Blu elettrico */
-        border-right: 5px solid #000000;
-    }
-    
-    [data-testid="stSidebar"] .stMarkdown h2, 
-    [data-testid="stSidebar"] label {
-        color: #FFFFFF !important;
-        font-family: 'Bungee', cursive;
+    /* Card per le impostazioni */
+    .stSlider, .stFileUploader {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid #00FFD1;
+        margin-bottom: 20px;
     }
 
-    /* 4. Pulsanti */
+    /* Pulsante Genera */
     .stButton>button {
-        background-color: #8C52FF !important; /* Viola acceso */
-        color: #FFFFFF !important;
-        border: 3px solid #000000 !important;
-        border-radius: 15px !important;
+        width: 100%;
+        background: linear-gradient(45deg, #FF00FF, #00FFD1) !important;
+        color: white !important;
         font-weight: bold !important;
-        font-size: 1.2rem !important;
-        box-shadow: 5px 5px 0px #000000;
-        transition: transform 0.1s;
+        font-size: 1.5rem !important;
+        border: none !important;
+        border-radius: 50px !important;
+        padding: 15px !important;
+        box-shadow: 0 0 20px rgba(0, 255, 209, 0.4);
+        transition: 0.3s;
     }
     .stButton>button:hover {
-        transform: translate(-2px, -2px);
-        box-shadow: 7px 7px 0px #000000;
-        background-color: #FF66C4 !important; /* Rosa shocking */
+        transform: scale(1.02);
+        box-shadow: 0 0 40px rgba(255, 0, 255, 0.6);
     }
 
-    /* 5. Uploader */
-    [data-testid="stFileUploader"] {
-        background-color: #FFFFFF;
-        border: 4px dashed #FF66C4 !important;
-        border-radius: 20px;
-        padding: 20px;
+    /* Testi etichette */
+    label {
+        color: #00FFD1 !important;
+        font-size: 1.1rem !important;
     }
 </style>
 """
-st.markdown(pop_art_css, unsafe_allow_html=True)
+st.markdown(space_css, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Logica Applicativa (Invariata ma Solida)
+# 2. Logica di Elaborazione
 # ==========================================
 
-def apply_bridges(mask, bridge_length, thickness):
-    contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    output = mask.copy()
-    if hierarchy is not None:
-        hierarchy = hierarchy[0]
-        for i, cnt in enumerate(contours):
-            if hierarchy[i][3] != -1: # È un buco (isola)
-                if cv2.contourArea(cnt) > 100:
+def process_stencil(img, layers_count, b_len, b_thick):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    smooth = cv2.bilateralFilter(gray, 9, 75, 75)
+    
+    # K-Means
+    data = smooth.reshape((-1, 1)).astype(np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, label, centers = cv2.kmeans(data, layers_count, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+    centers = np.uint8(np.sort(centers.flatten()))
+    quantized = centers[label.flatten()].reshape(smooth.shape)
+    
+    results = []
+    for i in range(layers_count):
+        mask = cv2.inRange(quantized, int(centers[i]), int(centers[i]))
+        
+        # Ponti
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        out_mask = mask.copy()
+        if hierarchy is not None:
+            hierarchy = hierarchy[0]
+            for j, cnt in enumerate(contours):
+                if hierarchy[j][3] != -1 and cv2.contourArea(cnt) > 100:
                     M = cv2.moments(cnt)
                     if M["m00"] != 0:
                         cX, cY = int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])
-                        cv2.line(output, (cX, cY), (cX, cY - bridge_length), 255, thickness)
-    return output
+                        cv2.line(out_mask, (cX, cY), (cX, cY - b_len), 255, b_thick)
+        results.append((out_mask, centers[i]))
+    return results
 
 # ==========================================
-# 3. Interfaccia Utente
+# 3. Layout a Scorrimento
 # ==========================================
 
-st.title("🌈 STENCIL PARTY! 🎨")
-st.write("### Trasforma le tue foto in stencil pazzeschi in un lampo!")
+st.title("🚀 Stencil Galaxy Lab")
+st.write("Configura la tua missione e trasforma le immagini in stencil stellari.")
 
-# Sidebar
-st.sidebar.header("⚙️ SETTAGGI SUPER")
-num_layers = st.sidebar.slider("Quanti colori?", 2, 6, 3)
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔗 PONTI MAGICI")
-bridge_len = st.sidebar.slider("Lunghezza", 10, 100, 40)
-bridge_thick = st.sidebar.slider("Spessore", 1, 15, 5)
+st.markdown("### 🛠️ Configurazione")
+num_layers = st.slider("Quanti strati vuoi creare?", 2, 8, 3)
+bridge_len = st.slider("Lunghezza ponti di supporto", 10, 150, 40)
+bridge_thick = st.slider("Spessore dei ponti", 1, 15, 3)
 
-uploaded_file = st.file_uploader("🚀 Carica la tua foto qui!", type=["jpg", "jpeg", "png"])
+st.markdown("### 📁 Caricamento")
+uploaded_file = st.file_uploader("Scegli il simulacro da processare", type=["jpg", "jpeg", "png"])
 
-if uploaded_file is not None:
-    # Elaborazione
-    file_bytes = np.frombuffer(uploaded_file.read(), np.uint8)
-    img = cv2.imdecode(file_bytes, 1)
+# Variabile di stato per la generazione
+if 'process' not in st.session_state:
+    st.session_state.process = False
+
+if uploaded_file:
+    st.image(uploaded_file, caption="Immagine pronta per il decollo", width=300)
     
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.subheader("📸 Originale")
-        st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), use_column_width=True)
-
-    # Elaborazione tecnica
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    smooth = cv2.bilateralFilter(gray, 9, 75, 75)
-    data = smooth.reshape((-1, 1)).astype(np.float32)
-    _, label, centers = cv2.kmeans(data, num_layers, None, (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0), 10, cv2.KMEANS_RANDOM_CENTERS)
-    centers = np.uint8(np.sort(centers.flatten()))
-    quantized = centers[label.flatten()].reshape(smooth.shape)
-
     st.markdown("---")
-    st.header("✂️ I TUOI LIVELLI DA RITAGLIARE")
-    
-    cols = st.columns(num_layers)
-    for i in range(num_layers):
-        layer_mask = cv2.inRange(quantized, int(centers[i]), int(centers[i]))
-        final_layer = apply_bridges(layer_mask, bridge_len, bridge_thick)
-        
-        with cols[i]:
-            st.markdown(f"**LIVELLO {i+1}**")
-            st.image(final_layer, use_column_width=True)
-            
-            res, thumb = cv2.imencode(".png", final_layer)
-            st.download_button(
-                label=f"💥 SCARICA {i+1}",
-                data=thumb.tobytes(),
-                file_name=f"stencil_pop_{i+1}.png",
-                mime="image/png"
-            )
+    if st.button("✨ CREA STENCIL ORA"):
+        st.session_state.process = True
 
-st.sidebar.success("💡 Consiglio: usa cartoncini colorati diversi per ogni strato!")
+    if st.session_state.process:
+        # Elaborazione
+        file_bytes = np.frombuffer(uploaded_file.read(), np.uint8)
+        img = cv2.imdecode(file_bytes, 1)
+        
+        layers = process_stencil(img, num_layers, bridge_len, bridge_thick)
+        
+        st.header("🌌 Risultati dell'Elaborazione")
+        
+        for idx, (l_img, val) in enumerate(layers):
+            st.subheader(f"Strato {idx+1} - Intensità: {val}")
+            st.image(l_img, use_container_width=True)
+            
+            # Download
+            res, thumb = cv2.imencode(".png", l_img)
+            st.download_button(
+                label=f"💾 Scarica Strato {idx+1}",
+                data=thumb.tobytes(),
+                file_name=f"stencil_layer_{idx+1}.png",
+                mime="image/png",
+                key=f"btn_{idx}"
+            )
+        
+        st.success("Tutti gli strati sono stati forgiati con successo!")
