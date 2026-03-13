@@ -4,153 +4,222 @@ import numpy as np
 from PIL import Image
 
 # ==========================================
-# 1. Configurazione e Stile Space & Neon
+# 1. Configurazione e Stile (CSS)
 # ==========================================
-st.set_page_config(page_title="Stencil Space Lab", layout="centered")
+# Impostiamo il layout 'centered' per una migliore leggibilità su sfondo complesso
+st.set_page_config(
+    page_title="Il Laboratorio dello Stencil Sognante",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
 
-space_css = """
+# --- CSS PERSONALIZZATO (Sfondo Van Gogh Sfocato) ---
+vangogh_blur_css = """
 <style>
-    /* Sfondo nero stellato (CSS puro) */
-    .stApp {
-        background-color: #000000;
-        background-image: 
-            radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
-            radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
-            radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px);
-        background-size: 550px 550px, 350px 350px, 250px 250px;
-        color: #00FFD1; /* Turchese Neon */
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    /* Rimuovi Sidebar e Menu Streamlit */
-    [data-testid="stSidebar"], section[data-testid="stSidebarNav"] {
+    /* 1. Rimuovi Sidebar e Menu Streamlit */
+    [data-testid="stSidebar"] {
         display: none;
     }
+    
+    /* 2. Sfondo della Pagina (Lo Sfondo Van Gogh Sfocato) */
+    .stApp {
+        /* Creazione di un pattern di pennellate sfuocate (stile Starry Night sfocato) */
+        background-color: #0d1a33; /* Blu scuro di base */
+        background-image: 
+            radial-gradient(ellipse at 30% 30%, rgba(255, 230, 0, 0.1) 0%, transparent 40%), /* Luna sfuocata */
+            radial-gradient(ellipse at 70% 20%, rgba(200, 220, 255, 0.1) 0%, transparent 30%), /* Stelle sfuocate */
+            
+            /* Pennellate lunghe, sfuocate e vorticose */
+            linear-gradient(130deg, transparent 60%, rgba(10, 40, 90, 0.2) 70%, transparent 80%),
+            linear-gradient(220deg, transparent 30%, rgba(15, 60, 130, 0.2) 50%, transparent 70%),
+            linear-gradient(40deg, transparent 10%, rgba(20, 80, 180, 0.2) 30%, transparent 50%),
+            linear-gradient(310deg, transparent 0%, rgba(5, 20, 50, 0.2) 20%, transparent 40%),
+            linear-gradient(170deg, transparent 40%, rgba(10, 30, 70, 0.2) 60%, transparent 80%);
+        
+        background-size: 150% 150%; /* Sovradimensionato per un effetto più morbido */
+        
+        /* Applichiamo la sfocatura (Blur) all'intero sfondo */
+        filter: blur(8px);
+        
+        /* Assicuriamoci che i contenuti non siano sfuocati */
+        transform: scale(1.05); /* Evita bordi neri per il blur */
+        z-index: -1;
+    }
 
-    /* Titoli Neon */
-    h1, h2, h3 {
-        color: #FF00FF !important; /* Magenta Neon */
-        text-shadow: 0 0 10px #FF00FF, 0 0 20px #FF00FF;
+    /* 3. Contenitore per i Contenuti (per contrasto) */
+    .stMainBlock {
+        background-color: rgba(0, 0, 0, 0.85); /* Sfondo scuro semitrasparente */
+        color: #e0f0ff; /* Testo chiaro, bluastro */
+        font-family: 'Garamond', 'Crimson Text', serif;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    /* 4. Titoli e Intestazioni */
+    @import url('https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap');
+    
+    h1, h2, h3, .stHeader {
+        font-family: 'UnifrakturMaguntia', cursive !important;
+        color: #FFDE59 !important; /* Oro antico/Giallo Van Gogh */
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
         text-align: center;
         text-transform: uppercase;
+        letter-spacing: 1.5px;
     }
+    
+    h1 { font-size: 3rem !important; }
 
-    /* Card per le impostazioni */
-    .stSlider, .stFileUploader {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 20px;
-        border-radius: 15px;
-        border: 1px solid #00FFD1;
-        margin-bottom: 20px;
-    }
-
-    /* Pulsante Genera */
+    /* 5. Pulsanti e Controlli */
     .stButton>button {
-        width: 100%;
-        background: linear-gradient(45deg, #FF00FF, #00FFD1) !important;
-        color: white !important;
-        font-weight: bold !important;
-        font-size: 1.5rem !important;
-        border: none !important;
-        border-radius: 50px !important;
-        padding: 15px !important;
-        box-shadow: 0 0 20px rgba(0, 255, 209, 0.4);
-        transition: 0.3s;
+        background-color: rgba(255, 222, 89, 0.05) !important; /* Giallo sfuocato */
+        color: #FFDE59 !important;
+        border: 2px solid #FFDE59 !important;
+        border-radius: 5px;
+        font-family: 'Garamond', serif;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 0 10px rgba(255, 222, 89, 0.3);
+        transition: all 0.3s;
+        margin-top: 1rem;
+        width: 100%; /* Pulsante a tutta larghezza */
     }
     .stButton>button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 0 40px rgba(255, 0, 255, 0.6);
+        background-color: #FFDE59 !important;
+        box-shadow: 0 0 20px rgba(255, 222, 89, 0.7);
+        color: #000000 !important;
     }
-
-    /* Testi etichette */
-    label {
-        color: #00FFD1 !important;
-        font-size: 1.1rem !important;
+    
+    /* Regola il testo nei controlli */
+    [data-testid="stFileUploader"] label, .stSlider label {
+        color: #e0f0ff !important;
     }
 </style>
 """
-st.markdown(space_css, unsafe_allow_html=True)
+st.markdown(vangogh_blur_css, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Logica di Elaborazione
+# 2. Funzioni Logiche di Elaborazione
 # ==========================================
 
-def process_stencil(img, layers_count, b_len, b_thick):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    smooth = cv2.bilateralFilter(gray, 9, 75, 75)
+def apply_bridges(mask, bridge_length, thickness):
+    """Identifica le isole e crea i ponti di giunzione."""
+    # Analisi dei contorni con gerarchia (RETR_CCOMP per i buchi)
+    contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    output = mask.copy()
     
-    # K-Means
-    data = smooth.reshape((-1, 1)).astype(np.float32)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    _, label, centers = cv2.kmeans(data, layers_count, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-    centers = np.uint8(np.sort(centers.flatten()))
-    quantized = centers[label.flatten()].reshape(smooth.shape)
-    
-    results = []
-    for i in range(layers_count):
-        mask = cv2.inRange(quantized, int(centers[i]), int(centers[i]))
-        
-        # Ponti
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-        out_mask = mask.copy()
-        if hierarchy is not None:
-            hierarchy = hierarchy[0]
-            for j, cnt in enumerate(contours):
-                if hierarchy[j][3] != -1 and cv2.contourArea(cnt) > 100:
+    if hierarchy is not None:
+        hierarchy = hierarchy[0]
+        for i, cnt in enumerate(contours):
+            # Se ha un padre (hierarchy[i][3] != -1), è un'isola/buco
+            if hierarchy[i][3] != -1:
+                area = cv2.contourArea(cnt)
+                if area > 100: # Filtro dimensione minima (regolabile)
                     M = cv2.moments(cnt)
                     if M["m00"] != 0:
-                        cX, cY = int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])
-                        cv2.line(out_mask, (cX, cY), (cX, cY - b_len), 255, b_thick)
-        results.append((out_mask, centers[i]))
-    return results
+                        cX = int(M["m10"] / M["m00"])
+                        cY = int(M["m01"] / M["m00"])
+                        # Disegna il ponte verso l'alto (bianco su maschera nera)
+                        cv2.line(output, (cX, cY), (cX, cY - bridge_length), 255, thickness)
+    return output
 
-# ==========================================
-# 3. Layout a Scorrimento
-# ==========================================
-
-st.title("🚀 Stencil Galaxy Lab")
-st.write("Configura la tua missione e trasforma le immagini in stencil stellari.")
-
-st.markdown("### 🛠️ Configurazione")
-num_layers = st.slider("Quanti strati vuoi creare?", 2, 8, 3)
-bridge_len = st.slider("Lunghezza ponti di supporto", 10, 150, 40)
-bridge_thick = st.slider("Spessore dei ponti", 1, 15, 3)
-
-st.markdown("### 📁 Caricamento")
-uploaded_file = st.file_uploader("Scegli il simulacro da processare", type=["jpg", "jpeg", "png"])
-
-# Variabile di stato per la generazione
-if 'process' not in st.session_state:
-    st.session_state.process = False
-
-if uploaded_file:
-    st.image(uploaded_file, caption="Immagine pronta per il decollo", width=300)
+def create_stencil_layers(image, num_layers, bridge_len, bridge_thick):
+    """Genera gli strati stencil dall'immagine, applicando i ponti."""
+    # Pre-processing
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    smooth = cv2.bilateralFilter(gray, 11, 85, 85) # Mantiene i bordi ma rimuove il rumore
     
-    st.markdown("---")
-    if st.button("✨ CREA STENCIL ORA"):
-        st.session_state.process = True
+    # K-Means Posterization
+    data = smooth.reshape((-1, 1)).astype(np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, label, centers = cv2.kmeans(data, num_layers, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+    
+    # Ordina i centri per luminosità (dal più scuro al più chiaro)
+    centers = np.uint8(np.sort(centers.flatten()))
+    quantized = centers[label.flatten()].reshape(smooth.shape)
 
-    if st.session_state.process:
-        # Elaborazione
-        file_bytes = np.frombuffer(uploaded_file.read(), np.uint8)
-        img = cv2.imdecode(file_bytes, 1)
+    layers = []
+    for i in range(num_layers):
+        # 1. Isola il livello specifico (maschera binaria)
+        # Il valore di grigio dello strato è centers[i]
+        layer_mask = cv2.inRange(quantized, int(centers[i]), int(centers[i]))
         
-        layers = process_stencil(img, num_layers, bridge_len, bridge_thick)
+        # 2. Applica i ponti automatici
+        final_layer = apply_bridges(layer_mask, bridge_len, bridge_thick)
+        layers.append((final_layer, centers[i]))
         
-        st.header("🌌 Risultati dell'Elaborazione")
+    return layers
+
+# ==========================================
+# 3. Interfaccia Utente (UI)
+# ==========================================
+
+st.title("Ars Stencil: Il Rituale Sognante")
+st.write("🌌 Benvenuto, artefice. Carica il tuo simulacro e forgia gli strati del sogno.")
+
+st.markdown("---")
+
+# --- AREA DI CARICAMENTO ---
+st.header("🕯️ Caricamento del Simulacro")
+uploaded_file = st.file_uploader("Sacrifica un Simulacro (Immagine)...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # --- Elaborazione Immagine (Corretto) ---
+    # Conversione corretta dell'immagine per OpenCV
+    file_bytes = np.frombuffer(uploaded_file.read(), np.uint8)
+    img_bgr = cv2.imdecode(file_bytes, 1)
+    
+    # --- Visualizzazione Originale ---
+    st.image(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), caption="Simulacro Pronto per il Rituale", use_column_width=True)
+
+    st.markdown("---")
+
+    # --- CONFIGURAZIONE DEGLI STENCIL ---
+    st.header("📜 Rituali di Configurazione")
+    st.write("Definisci la profondità e i legami dei tuoi strati.")
+
+    num_layers_config = st.slider("🕯️ Numero di Livelli (Sogno)", 2, 8, 4)
+    st.markdown("---")
+    st.subheader("🔗 Ponti dell'Anima (Legami)")
+    bridge_len_config = st.slider("Lunghezza Legami (px)", 10, 150, 40)
+    bridge_thick_config = st.slider("Spessore Legami (px)", 1, 15, 4)
+
+    st.markdown("---")
+
+    # --- PULSANTE GENERA (In fondo alla pagina) ---
+    generate_btn = st.button("✨ Genera Frammenti Stencil ✨")
+
+    if generate_btn:
+        # --- Generazione e Visualizzazione dei Livelli ---
+        with st.spinner("⏳ Il rituale di posterizzazione è in corso..."):
+            stencil_layers = create_stencil_layers(img_bgr, num_layers_config, bridge_len_config, bridge_thick_config)
         
-        for idx, (l_img, val) in enumerate(layers):
-            st.subheader(f"Strato {idx+1} - Intensità: {val}")
-            st.image(l_img, use_container_width=True)
-            
-            # Download
-            res, thumb = cv2.imencode(".png", l_img)
-            st.download_button(
-                label=f"💾 Scarica Strato {idx+1}",
-                data=thumb.tobytes(),
-                file_name=f"stencil_layer_{idx+1}.png",
-                mime="image/png",
-                key=f"btn_{idx}"
-            )
+        st.header("💀 I Frammenti del Sogno (Strati Stencil)")
+        cols = st.columns(num_layers_config)
         
-        st.success("Tutti gli strati sono stati forgiati con successo!")
+        for idx, (l_img, val) in enumerate(stencil_layers):
+            # Visualizza e offri il download
+            with cols[idx]:
+                # Aggiungi un titolo sognante ad ogni colonna
+                st.markdown(f"### Frammento {idx+1}")
+                st.write(f"*(Grigio: {val})*")
+                st.image(l_img, use_column_width=True)
+                
+                # Bottone di download stilizzato
+                res, thumb = cv2.imencode(".png", l_img)
+                st.download_button(
+                    label=f"📥 Scarica Frammento {idx+1}",
+                    data=thumb.tobytes(),
+                    file_name=f"stencil_sognante_livello_{idx+1}.png",
+                    mime="image/png",
+                    key=f"btn_{idx}" # Aggiungiamo un key univoco per ogni bottone
+                )
+
+        st.markdown("---")
+        st.warning("Memento: L'ordine di spruzzata va dal più scuro (Strato 1) al più chiaro.")
+
+st.markdown("---")
+st.info("💡 Consiglio: usa cartoncini di diverso colore per ogni strato!")
