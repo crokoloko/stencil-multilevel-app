@@ -22,9 +22,10 @@ def get_base64_logo(file_path):
         return base64.b64encode(data).decode()
     except: return None
 
+# Assicurati di avere un file chiamato 'logo.png' nella stessa cartella
 logo_b64 = get_base64_logo("logo.png")
 
-# CSS: News Ticker + Sfondo Animato + Street Font
+# CSS: News Ticker (Sopra, Nero/Bianco, Lento) + Sfondo Animato + Street Font
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Bungee&display=swap');
@@ -51,23 +52,26 @@ st.markdown(f"""
         100% {{ filter: brightness(0.9); }}
     }}
 
-    /* NEWS TICKER ANIMATION */
+    /* --- NEWS TICKER ANIMATION (Modificata) --- */
     .ticker-wrap {{
         width: 100%;
         overflow: hidden;
-        background-color: rgba(255, 215, 0, 0.9); /* Giallo Street */
-        border: 2px solid #000;
-        margin-bottom: 20px;
+        background-color: #000000; /* Sfondo Nero */
+        border-bottom: 2px solid #FFD700; /* Bordo Giallo sotto per stacco */
+        margin-bottom: 10px;
         padding: 5px 0;
+        position: relative;
+        z-index: 10; /* Sopra tutto */
     }}
     .ticker {{
         display: inline-block;
         white-space: nowrap;
         padding-right: 100%;
-        animation: ticker 30s linear infinite;
+        /* VELOCITÀ DIMEZZATA: da 30s a 60s */
+        animation: ticker 60s linear infinite;
         font-family: 'Bungee', cursive;
-        color: #000;
-        font-size: 1.2rem;
+        color: #ffffff; /* Testo Bianco */
+        font-size: 1.1rem;
     }}
     @keyframes ticker {{
         0% {{ transform: translate3d(100%, 0, 0); }}
@@ -77,7 +81,7 @@ st.markdown(f"""
     .block-container {{
         max-width: 850px;
         background-color: transparent !important;
-        padding: 20px !important;
+        padding: 10px !important; /* Ridotto per far spazio alla barra sopra */
     }}
 
     h1, h2, h3, h4 {{
@@ -90,12 +94,13 @@ st.markdown(f"""
     p, span, label, .stMarkdown {{
         color: #ffffff !important;
         font-weight: 800 !important;
+        text-align: center;
         text-shadow: 2px 2px 4px #000;
     }}
 
     .logo-img {{
         display: block;
-        margin: 0 auto 10px auto;
+        margin: 0 auto 20px auto;
         max-height: 200px;
         filter: drop-shadow(2px 4px 6px #000);
     }}
@@ -122,52 +127,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Funzioni Core
+# 2. Interfaccia (Posizionamento Barra/Logo)
 # ==========================================
 
-def apply_stencil_logic(mask, b_len, b_thick, cross_size):
-    h, w = mask.shape
-    out = mask.copy()
-    contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    if hierarchy is not None:
-        hierarchy = hierarchy[0]
-        for i, cnt in enumerate(contours):
-            if hierarchy[i][3] != -1 and cv2.contourArea(cnt) > 80:
-                M = cv2.moments(cnt)
-                if M["m00"] != 0:
-                    cX, cY = int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])
-                    cv2.line(out, (cX, cY), (cX, cY - b_len), 255, b_thick)
-    m = cross_size + 25
-    centers = [(m, m), (w-m, m), (m, h-m), (w-m, h-m)]
-    for cX, cY in centers:
-        cv2.line(out, (cX - cross_size, cY), (cX + cross_size, cY), 255, b_thick)
-        cv2.line(out, (cX, cY - cross_size), (cX, cY + cross_size), 255, b_thick)
-    return out
-
-def create_preview(masks, colors):
-    h, w = masks[0].shape
-    bg = np.full((h, w, 3), 60, dtype=np.uint8)
-    canvas = bg.copy()
-    for i, m in enumerate(masks):
-        rgb = tuple(int(colors[i].lstrip('#')[j:j+2], 16) for j in (0, 2, 4))
-        bgr = (rgb[2], rgb[1], rgb[0])
-        color_img = np.full((h, w, 3), bgr, dtype=np.uint8)
-        layer_c = cv2.bitwise_and(color_img, color_img, mask=cv2.bitwise_not(m))
-        bg_part = cv2.bitwise_and(canvas, canvas, mask=cv2.bitwise_not(m))
-        blended = cv2.addWeighted(bg_part, 0.4, layer_c, 0.6, 0)
-        canvas = cv2.bitwise_and(canvas, canvas, mask=m)
-        canvas = cv2.add(canvas, blended)
-    return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
-
-# ==========================================
-# 3. Interfaccia
-# ==========================================
-
-# Logo
-if logo_b64:
-    st.markdown(f'<img src="data:image/png;base64,{logo_b64}" class="logo-img">', unsafe_allow_html=True)
-
-# NEWS TICKER (Lercio Style)
+# --- NEWS TICKER (Sopra il Logo, Lercio Style) ---
 news = [
     "LERCIO: Scoperto stencil talmente realistico che il muro ha chiesto il permesso di soggiorno",
     "LERCIO: Ragazzo spruzza vernice giallo oro: scambiato per il Re Mida della Garbatella",
@@ -178,13 +141,55 @@ news = [
 ticker_text = " • ".join(news)
 st.markdown(f'<div class="ticker-wrap"><div class="ticker">{ticker_text}</div></div>', unsafe_allow_html=True)
 
+# --- LOGO (Sotto la Barra) ---
+if logo_b64:
+    st.markdown(f'<img src="data:image/png;base64,{logo_b64}" class="logo-img">', unsafe_allow_html=True)
+else:
+    st.title("Chroma Stencil Lab")
+
+# --- MENU TABS ---
 tab_ed, tab_info = st.tabs(["🏗️ EDITOR STENCIL", "⚡ INFO & TOOLS"])
 
 with tab_ed:
-    up = st.file_uploader("Carica una foto", type=["jpg", "png", "jpeg"])
+    up = st.file_uploader("1. Carica la foto da trasformare", type=["jpg", "png", "jpeg"])
     if up:
+        # Funzioni Core e Logica di Elaborazione Invariate
+        def apply_stencil_logic(mask, b_len, b_thick, cross_size):
+            h, w = mask.shape
+            out = mask.copy()
+            contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+            if hierarchy is not None:
+                hierarchy = hierarchy[0]
+                for i, cnt in enumerate(contours):
+                    if hierarchy[i][3] != -1 and cv2.contourArea(cnt) > 80:
+                        M = cv2.moments(cnt)
+                        if M["m00"] != 0:
+                            cX, cY = int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])
+                            cv2.line(out, (cX, cY), (cX, cY - b_len), 255, b_thick)
+            m = cross_size + 25
+            centers = [(m, m), (w-m, m), (m, h-m), (w-m, h-m)]
+            for cX, cY in centers:
+                cv2.line(out, (cX - cross_size, cY), (cX + cross_size, cY), 255, b_thick)
+                cv2.line(out, (cX, cY - cross_size), (cX, cY + cross_size), 255, b_thick)
+            return out
+
+        def create_preview(masks, colors):
+            h, w = masks[0].shape
+            bg = np.full((h, w, 3), 60, dtype=np.uint8)
+            canvas = bg.copy()
+            for i, m in enumerate(masks):
+                rgb = tuple(int(colors[i].lstrip('#')[j:j+2], 16) for j in (0, 2, 4))
+                bgr = (rgb[2], rgb[1], rgb[0])
+                color_img = np.full((h, w, 3), bgr, dtype=np.uint8)
+                layer_c = cv2.bitwise_and(color_img, color_img, mask=cv2.bitwise_not(m))
+                bg_part = cv2.bitwise_and(canvas, canvas, mask=cv2.bitwise_not(m))
+                blended = cv2.addWeighted(bg_part, 0.4, layer_c, 0.6, 0)
+                canvas = cv2.bitwise_and(canvas, canvas, mask=m)
+                canvas = cv2.add(canvas, blended)
+            return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
+
         img_raw = cv2.imdecode(np.frombuffer(up.read(), np.uint8), 1)
-        st.image(cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB), use_container_width=True)
+        st.image(cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB), use_container_width=True, caption="Originale")
         
         with st.expander("⚙️ Parametri Tecnici", expanded=True):
             c1, c2 = st.columns(2)
@@ -214,16 +219,18 @@ with tab_ed:
                 t_prev, t_lay = st.tabs(["🌌 ANTEPRIMA", "✂️ TAGLIO"])
                 with t_prev:
                     p_img = create_preview(masks, colors)
-                    st.image(p_img, use_container_width=True)
+                    st.image(p_img, use_container_width=True, caption="Simulazione finale")
                 with t_lay:
+                    st.info("Ritaglia le parti NERE. Le crocette servono per l'allineamento.")
                     l_tabs = st.tabs([f"{i+1}" for i in range(n_l)])
                     for i, lt in enumerate(l_tabs):
                         with lt:
-                            st.image(masks[i], use_container_width=True)
+                            st.image(masks[i], use_container_width=True, caption=f"Maschera {i+1}")
                             _, buf = cv2.imencode(".png", masks[i])
-                            st.download_button(f"Scarica {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"dl_{i}")
+                            st.download_button(f"📥 Scarica PNG {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"dl_{i}")
 
 with tab_info:
+    # --- CALCOLATORE BOMBOLETTE ---
     st.markdown("## 🎨 CALCOLATORE BOMBOLETTE (CAN BUDGET)")
     if st.session_state.current_masks:
         for i, m in enumerate(st.session_state.current_masks):
@@ -231,21 +238,17 @@ with tab_info:
             cans = max(0.2, round(coverage * 1.5, 1))
             col_a, col_b = st.columns([1, 4])
             col_a.color_picker(f"L{i+1}", st.session_state.current_colors[i], key=f"info_c_{i}", disabled=True)
-            col_b.write(f"Quantità: **{cans}** bombolette (400ml)")
+            col_b.write(f"Quantità stimata: **{cans}** bombolette (400ml)")
     else:
         st.info("💡 Suggerimento: Elabora una foto nell'Editor per sbloccare il preventivo!")
 
     st.markdown("---")
 
+    # --- IA STREET GENERATOR ---
     st.markdown("## 🤖 IA STREET GENERATOR")
-    st.write("Genera graffiti complessi con l'IA (Simulazione)")
+    st.write("Genera bozze di graffiti complessi con l'IA (Simulazione)")
     c1, c2 = st.columns([2,1])
     prompt_in = c1.text_input("Testo del Graffito", "STREET ART")
     style_in = c2.selectbox("Stile", ["Wildstyle", "Bubble", "Stencil Art"])
     if st.button("🚀 GENERA CON IA"):
         st.info(f"Sto disegnando un pezzo in stile {style_in} per '{prompt_in}'...")
-
-    st.markdown("---")
-
-    st.markdown("## 📚 TIPS PER IL MURO")
-    st.write("- **Ponti:** Usa nastro carta se le isole cadono.\n- **Distanza:** 15-20cm dal muro.\n- **Ordine:** Dal chiaro allo scuro.")
