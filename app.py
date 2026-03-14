@@ -5,14 +5,14 @@ import numpy as np
 # ==========================================
 # 1. Stile UI (Menu e Box Bomboletta)
 # ==========================================
-st.set_page_config(page_title="Chroma Stencil Lab", layout="wide")
+st.set_page_config(page_title="Stencilability Lab", layout="wide")
 
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
     h1 { font-family: 'Bungee', cursive; color: #FFD700 !important; text-align: center; }
     
-    /* Box stile Bomboletta */
+    /* Box stile Bomboletta / Score */
     .spray-info-box {
         background-color: #1e1e1e;
         border-left: 10px solid #FFD700;
@@ -22,42 +22,56 @@ st.markdown("""
         color: #00FFD1;
         box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
     }
-    .spray-info-box h4 { color: #FFD700 !important; margin-bottom: 10px; }
-    
-    /* Stile per i Tabs (il menu a scorrimento) */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #1e1e1e;
-        border-radius: 5px 5px 0px 0px;
-        color: white;
-        padding: 10px 20px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #FFD700 !important;
-        color: black !important;
-    }
+    .score-high { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
+    .score-med { color: #FFA500; font-weight: bold; font-size: 1.5rem; }
+    .score-low { color: #FF0000; font-weight: bold; font-size: 1.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Funzioni Core
+# 2. Funzioni di Analisi Avanzata
 # ==========================================
+
+def calculate_stencil_score(img):
+    """Calcola quanto la foto è adatta agli stencil (0-100)."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # 1. Analisi del Contrasto (Deviazione Standard)
+    contrast = np.std(gray)
+    contrast_score = np.clip((contrast / 60) * 40, 0, 40) # Max 40 punti
+    
+    # 2. Analisi della Complessità (Bordi/Rumore)
+    edges = cv2.Canny(gray, 100, 200)
+    edge_density = np.sum(edges) / (edges.shape[0] * edges.shape[1])
+    # Più i bordi sono densi, più è difficile ritagliare (troppo dettaglio = male)
+    complexity_score = np.clip(30 - (edge_density * 2), 0, 30) # Max 30 punti
+    
+    # 3. Analisi della Saturazione (Per stencil a colori)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    saturation = np.mean(hsv[:,:,1])
+    sat_score = np.clip((saturation / 100) * 30, 0, 30) # Max 30 punti
+    
+    total_score = int(contrast_score + complexity_score + sat_score)
+    return total_score
 
 def get_image_info(img):
     small_img = cv2.resize(img, (150, 150))
     pixels = small_img.reshape(-1, 3)
     unique_colors = len(np.unique(pixels, axis=0))
-    # Logica strati consigliati
-    rec = 3 if unique_colors < 10000 else (4 if unique_colors < 25000 else 5)
-    return unique_colors, rec
+    score = calculate_stencil_score(img)
+    
+    if score > 75: 
+        label, cls = "ECCELLENTE 🚀", "score-high"
+    elif score > 50: 
+        label, cls = "BUONA 🎨", "score-med"
+    else: 
+        label, cls = "DIFFICILE ⚠️", "score-low"
+        
+    return unique_colors, label, cls, score
 
 def apply_bridges_and_crosses(mask, b_len, b_thick, cross_size):
     h, w = mask.shape
     out = mask.copy()
-    
-    # 1. Ponti (Bridges)
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     if hierarchy is not None:
         hierarchy = hierarchy[0]
@@ -67,20 +81,12 @@ def apply_bridges_and_crosses(mask, b_len, b_thick, cross_size):
                 if M["m00"] != 0:
                     cX, cY = int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])
                     cv2.line(out, (cX, cY), (cX, cY - b_len), 255, b_thick)
-    
-    # 2. Crocette (Alignment Crosses)
     m = cross_size + 20
     centers = [(m, m), (w-m, m), (m, h-m), (w-m, h-m)]
     for cX, cY in centers:
         cv2.line(out, (cX - cross_size, cY), (cX + cross_size, cY), 255, b_thick)
         cv2.line(out, (cX, cY - cross_size), (cX, cY + cross_size), 255, b_thick)
     return out
-
-def create_concrete_texture(h, w):
-    bg = np.full((h, w, 3), 100, dtype=np.uint8)
-    noise = np.random.normal(0, 15, (h, w, 3)).astype(np.int16)
-    concrete = np.clip(bg.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-    return cv2.GaussianBlur(concrete, (3, 3), 0)
 
 # ==========================================
 # 3. Interfaccia
@@ -94,8 +100,8 @@ if up_file:
     file_bytes = np.frombuffer(up_file.read(), np.uint8)
     img = cv2.imdecode(file_bytes, 1)
     
-    # Analisi e Info Box
-    n_unique, rec_layers = get_image_info(img)
+    # Analisi Avanzata
+    n_unique, score_label, score_class, score_num = get_image_info(img)
     
     col_img, col_info = st.columns([1, 1])
     with col_img:
@@ -103,11 +109,13 @@ if up_file:
     with col_info:
         st.markdown(f"""
         <div class="spray-info-box">
-            <h4>📓 INFO BOMBOLETTA</h4>
-            <p><b>Colori rilevati:</b> {n_unique:,}</p>
-            <p><b>Strati consigliati:</b> {rec_layers}</p>
+            <h4>📓 STENCILABILITY REPORT</h4>
+            <p><b>Punteggio Adattabilità:</b> <span class="{score_class}">{score_num}/100</span></p>
+            <p><b>Giudizio:</b> <span class="{score_class}">{score_label}</span></p>
             <hr style="border-color: #444;">
-            <p style="font-size: 0.9rem;">Usa le crocette agli angoli per allineare gli strati sul muro.</p>
+            <p style="font-size: 0.9rem;"><b>Dettagli Tecnici:</b><br>
+            La foto presenta {n_unique:,} tonalità. 
+            {"Il contrasto è ottimo per separare le masse." if score_num > 60 else "Potrebbe servire più contrasto prima di procedere."}</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -115,7 +123,7 @@ if up_file:
     
     # Parametri
     c1, c2, c3, c4 = st.columns(4)
-    n_colors = c1.slider("Numero Strati", 2, 8, rec_layers)
+    n_colors = c1.slider("Numero Strati", 2, 8, 4)
     b_len = c2.slider("Lunghezza Ponti", 10, 80, 30)
     b_thick = c3.slider("Spessore Linee", 1, 10, 2)
     cross_size = c4.slider("Taglia Crocette", 10, 50, 20)
@@ -127,7 +135,6 @@ if up_file:
     centers = np.uint8(centers)
     quantized_lab = centers[label.flatten()].reshape((img_lab.shape))
 
-    # Generazione maschere e colori
     masks = []
     cols_hex = []
     for i in range(n_colors):
@@ -136,8 +143,8 @@ if up_file:
         rgb = cv2.cvtColor(np.uint8([[centers[i]]]), cv2.COLOR_LAB2RGB)[0][0]
         cols_hex.append('#%02x%02x%02x' % tuple(rgb))
 
-    # --- MENU A SCHEDE (TAB) PER GLI STRATI ---
-    st.subheader("✂️ Seleziona lo strato da visualizzare")
+    # MENU A TAB
+    st.subheader("✂️ Esplora i Livelli")
     tab_names = [f"Strato {i+1}" for i in range(n_colors)]
     tabs = st.tabs(tab_names)
 
@@ -147,7 +154,7 @@ if up_file:
             with col_t1:
                 st.image(masks[i], caption=f"Maschera di Taglio {i+1}", use_container_width=True)
             with col_t2:
-                st.markdown(f"**Colore Originale:**")
+                st.markdown(f"**Colore rilevato:**")
                 st.color_picker(f"Tinta {i+1}", cols_hex[i], key=f"cp_{i}")
                 _, buf = cv2.imencode(".png", masks[i])
                 st.download_button(f"📥 Scarica PNG {i+1}", buf.tobytes(), f"layer_{i+1}.png", "image/png")
@@ -157,7 +164,11 @@ if up_file:
     # Simulatore Finale
     if st.button("✨ GENERA ANTEPRIMA URBAN (CEMENTO)"):
         h, w = masks[0].shape
-        canvas = create_concrete_texture(h, w)
+        # Creazione texture cemento
+        bg = np.full((h, w, 3), 100, dtype=np.uint8)
+        noise = np.random.normal(0, 15, (h, w, 3)).astype(np.int16)
+        canvas = np.clip(bg.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        
         for i in range(n_colors):
             m = masks[i]
             rgb = tuple(int(cols_hex[i].lstrip('#')[j:j+2], 16) for j in (0, 2, 4))
