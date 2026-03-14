@@ -6,7 +6,7 @@ import base64
 from io import BytesIO
 
 # ==========================================
-# 1. Configurazione e Stile (Total Urban Wall)
+# 1. Configurazione e Stile (Urban Wall Animato)
 # ==========================================
 st.set_page_config(page_title="Chroma Stencil Lab PRO", layout="centered")
 
@@ -24,9 +24,10 @@ def get_base64_logo(file_path):
 
 logo_b64 = get_base64_logo("logo.png")
 
-# CSS CORRETTO: Usiamo le doppie parentesi {{ }} per i blocchi CSS
+# CSS con Doppie Graffe per evitare errori Python e Sfondo Animato
 st.markdown(f"""
 <style>
+    /* Sfondo principale: Muro di Mattoni Notturno Animato */
     .stApp {{
         background: radial-gradient(circle at 15% 15%, rgba(255, 230, 0, 0.25), transparent 35%),
                     radial-gradient(circle at 85% 10%, rgba(255, 230, 0, 0.2), transparent 30%),
@@ -35,18 +36,19 @@ st.markdown(f"""
         background-color: #0a192f;
         background-attachment: fixed;
         background-blend-mode: overlay, overlay, normal, normal;
+        /* ANIMAZIONE MOVIMENTO MATTONI */
         animation: moveBackground 60s linear infinite, lampFlicker 8s ease-in-out infinite alternate;
     }}
 
     @keyframes moveBackground {{
         from {{ background-position: 0 0, 0 0, 0 0, 0 0; }}
-        to {{ background-position: 500px 1000px, 200px 400px, 0 0, 0 0; }}
+        to {{ background-position: 1000px 1000px, 200px 400px, 0 0, 0 0; }}
     }}
 
     @keyframes lampFlicker {{
-        0% {{ filter: brightness(1) contrast(1); }}
-        50% {{ filter: brightness(1.1) contrast(1.05); }}
-        100% {{ filter: brightness(0.95) contrast(0.98); }}
+        0% {{ filter: brightness(1); }}
+        50% {{ filter: brightness(1.1); }}
+        100% {{ filter: brightness(0.95); }}
     }}
 
     .stApp::before {{
@@ -62,26 +64,28 @@ st.markdown(f"""
         background-color: transparent !important;
         box-shadow: none !important;
         padding: 20px !important;
+        margin: auto;
     }}
 
-    h1, h2, h3, h4, p, span, li {{
+    /* Testi e Titoli Bianco su Scuro */
+    h1, h2, h3, h4, p, span {{
         color: #ffffff !important;
         font-weight: 800 !important;
         text-align: center;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        text-shadow: 2px 2px 5px rgba(0,0,0,0.9);
     }}
 
     .stSlider label, .stFileUploader label {{
         color: #FFD700 !important;
         font-weight: bold !important;
-        text-shadow: 1px 1px 2px #000;
+        text-shadow: 1px 1px 3px #000;
     }}
 
     .logo-img {{
         display: block;
         margin: 0 auto 30px auto;
         max-height: 250px;
-        filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.8));
+        filter: drop-shadow(2px 5px 10px rgba(0,0,0,0.7));
     }}
 
     .stTabs [data-baseweb="tab-list"] {{
@@ -150,6 +154,17 @@ def create_preview(masks, colors):
         canvas = cv2.add(canvas, blended)
     return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
 
+def generate_zip(project):
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        prev_bgr = cv2.cvtColor(project['preview'], cv2.COLOR_RGB2BGR)
+        _, p_img = cv2.imencode(".png", prev_bgr)
+        z.writestr("anteprima.png", p_img.tobytes())
+        for i, m in enumerate(project['masks']):
+            _, m_img = cv2.imencode(".png", m)
+            z.writestr(f"strato_{i+1}.png", m_img.tobytes())
+    return buf.getvalue()
+
 # ==========================================
 # 3. Interfaccia
 # ==========================================
@@ -210,7 +225,7 @@ with t_saved:
         for idx, p in enumerate(st.session_state.saved_projects):
             with st.expander(f"📁 {p['name']}"):
                 st.image(p['preview'], use_container_width=True)
+                z_data = generate_zip(p)
+                st.download_button("📥 SCARICA ZIP", z_data, f"{p['name']}.zip", key=f"z_{idx}")
                 if st.button(f"🗑️ Elimina", key=f"del_{idx}"):
-                    st.session_state.saved_projects.pop(idx)
-                    st.rerun()
-
+                    st.session_state.saved_projects.pop(idx); st.rerun()
