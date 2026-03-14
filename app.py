@@ -6,7 +6,7 @@ import base64
 from io import BytesIO
 
 # ==========================================
-# 1. Configurazione e Stile
+# 1. Configurazione e Stile (Logo XL e Menu Centrato)
 # ==========================================
 st.set_page_config(page_title="Chroma Stencil Lab PRO", layout="centered")
 
@@ -24,9 +24,10 @@ def get_base64_logo(file_path):
 
 logo_b64 = get_base64_logo("logo.png")
 
-# CSS Corretto (Nota: le doppie parentesi {{ }} servono per evitare l'errore che hai visto)
+# CSS Aggiornato per Logo Grande e Menu Centrato
 st.markdown(f"""
 <style>
+    /* Sfondo Animato */
     .stApp {{
         background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), 
                     url('https://www.transparenttextures.com/patterns/brick-wall.png');
@@ -48,18 +49,37 @@ st.markdown(f"""
         z-index: -1;
     }}
 
+    /* Contenitore Centrale */
     .block-container {{
-        max-width: 800px;
-        background-color: rgba(255, 253, 208, 0.8);
-        border-radius: 20px;
-        padding: 30px !important;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        margin-top: 20px;
+        max-width: 850px;
+        background-color: rgba(255, 253, 208, 0.85);
+        border-radius: 25px;
+        padding: 40px !important;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        margin: auto;
+    }}
+
+    /* LOGO INGRANDITO */
+    .logo-img {{
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        max-height: 250px; /* Logo più grande */
+        width: auto;
+        margin-bottom: 30px;
+        filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2));
+    }}
+
+    /* CENTRATURA MENU TABS */
+    .stTabs [data-baseweb="tab-list"] {{
+        justify-content: center; /* Centra le etichette del menu */
+        gap: 20px;
     }}
 
     h1, h2, h3, h4, p, label {{
         color: #000000 !important;
         font-weight: 800 !important;
+        text-align: center; /* Centra i testi */
     }}
 
     .stButton>button {{
@@ -67,21 +87,14 @@ st.markdown(f"""
         color: black !important;
         border: 2px solid #000 !important;
         box-shadow: 4px 4px 0px #000;
-        border-radius: 10px;
-    }}
-
-    .logo-img {{
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-        max-height: 120px;
-        margin-bottom: 20px;
+        border-radius: 12px;
+        height: 50px;
     }}
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Funzioni Core
+# 2. Funzioni Core (Invariate)
 # ==========================================
 
 def apply_bridges_and_crosses(mask, b_len, b_thick, cross_size):
@@ -134,13 +147,14 @@ def generate_zip(project):
 # 3. Interfaccia
 # ==========================================
 
-# Visualizza Logo
+# Logo Centrale e Grande
 if logo_b64:
     st.markdown(f'<img src="data:image/png;base64,{logo_b64}" class="logo-img">', unsafe_allow_html=True)
 else:
-    st.title("🎨 Chroma Stencil Lab")
+    st.title("🌈 CHROMA STENCIL LAB")
 
-tab_ed, tab_sav = st.tabs(["🏗️ EDITOR", "💾 ARCHIVIO"])
+# Menu centrato
+tab_ed, tab_sav = st.tabs(["🏗️ EDITOR PROGETTO", "💾 SALVATI"])
 
 with tab_ed:
     up = st.file_uploader("Carica immagine", type=["jpg", "png", "jpeg"])
@@ -155,43 +169,50 @@ with tab_ed:
             b_t = c2.slider("Spessore", 1, 10, 2)
             c_s = c2.slider("Crocette", 10, 50, 20)
 
-        if st.button("✨ ELABORA"):
-            img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-            data = img_lab.reshape((-1, 3)).astype(np.float32)
-            _, label, centers = cv2.kmeans(data, n_l, None, (cv2.TERM_CRITERIA_EPS+20, 20, 1.0), 10, cv2.KMEANS_RANDOM_CENTERS)
-            centers = np.uint8(centers)
-            q_lab = centers[label.flatten()].reshape((img_lab.shape))
+        if st.button("✨ ELABORA STENCIL"):
+            with st.spinner('Creazione stencil in corso...'):
+                img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                data = img_lab.reshape((-1, 3)).astype(np.float32)
+                _, label, centers = cv2.kmeans(data, n_l, None, (cv2.TERM_CRITERIA_EPS+20, 20, 1.0), 10, cv2.KMEANS_RANDOM_CENTERS)
+                centers = np.uint8(centers)
+                q_lab = centers[label.flatten()].reshape((img_lab.shape))
 
-            masks, colors = [], []
-            for i in range(n_l):
-                m = cv2.inRange(q_lab, centers[i], centers[i])
-                masks.append(apply_bridges_and_crosses(m, b_l, b_t, c_s))
-                rgb = cv2.cvtColor(np.uint8([[centers[i]]]), cv2.COLOR_LAB2RGB)[0][0]
-                colors.append('#%02x%02x%02x' % tuple(rgb))
-            
-            t_prev, t_lay = st.tabs(["🌌 ANTEPRIMA", "✂️ TAGLIO"])
-            with t_prev:
-                p_img = create_preview(masks, colors)
-                st.image(p_img, use_container_width=True)
-                if st.button("💾 SALVA PROGETTO"):
-                    st.session_state.saved_projects.append({"name": f"Stencil_{len(st.session_state.saved_projects)+1}", "preview": p_img, "masks": masks, "colors": colors})
-                    st.success("Salvato!")
-            with t_lay:
-                l_tabs = st.tabs([f"{i+1}" for i in range(n_l)])
-                for i, lt in enumerate(l_tabs):
-                    with lt:
-                        st.image(masks[i], use_container_width=True)
-                        _, buf = cv2.imencode(".png", masks[i])
-                        st.download_button(f"Scarica {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"d_{i}")
+                masks, colors = [], []
+                for i in range(n_l):
+                    m = cv2.inRange(q_lab, centers[i], centers[i])
+                    masks.append(apply_bridges_and_crosses(m, b_l, b_t, c_s))
+                    rgb = cv2.cvtColor(np.uint8([[centers[i]]]), cv2.COLOR_LAB2RGB)[0][0]
+                    colors.append('#%02x%02x%02x' % tuple(rgb))
+                
+                t_prev, t_lay = st.tabs(["🌌 ANTEPRIMA", "✂️ TAGLIO"])
+                with t_prev:
+                    p_img = create_preview(masks, colors)
+                    st.image(p_img, use_container_width=True)
+                    if st.button("💾 SALVA PROGETTO"):
+                        st.session_state.saved_projects.append({
+                            "name": f"Stencil_{len(st.session_state.saved_projects)+1}", 
+                            "preview": p_img, 
+                            "masks": masks, 
+                            "colors": colors
+                        })
+                        st.success("Aggiunto ai Salvati!")
+                with t_lay:
+                    l_tabs = st.tabs([f"{i+1}" for i in range(n_l)])
+                    for i, lt in enumerate(l_tabs):
+                        with lt:
+                            st.image(masks[i], use_container_width=True)
+                            _, buf = cv2.imencode(".png", masks[i])
+                            st.download_button(f"Scarica Strato {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"d_{i}")
 
 with tab_sav:
     if not st.session_state.saved_projects:
-        st.info("Vuoto.")
+        st.info("Non ci sono ancora progetti salvati.")
     else:
         for idx, p in enumerate(st.session_state.saved_projects):
             with st.expander(f"📁 {p['name']}"):
                 st.image(p['preview'], use_container_width=True)
                 z_data = generate_zip(p)
-                st.download_button("📥 ZIP", z_data, f"{p['name']}.zip", key=f"z_{idx}")
-                if st.button("🗑️ Elimina", key=f"del_{idx}"):
-                    st.session_state.saved_projects.pop(idx); st.rerun()
+                st.download_button("📥 SCARICA ZIP COMPLETO", z_data, f"{p['name']}.zip", key=f"z_{idx}")
+                if st.button(f"🗑️ Elimina {p['name']}", key=f"del_{idx}"):
+                    st.session_state.saved_projects.pop(idx)
+                    st.rerun()
