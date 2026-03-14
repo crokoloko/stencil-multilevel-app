@@ -2,56 +2,93 @@ import streamlit as st
 import cv2
 import numpy as np
 import zipfile
+import base64
 from io import BytesIO
+from PIL import Image
 
 # ==========================================
-# 1. Configurazione e Stile (Muro Animato)
+# 1. Configurazione e Stile (Logo e Centratura)
 # ==========================================
 st.set_page_config(page_title="Chroma Stencil Lab PRO", layout="centered")
 
 if 'saved_projects' not in st.session_state:
     st.session_state.saved_projects = []
 
-# --- CSS CON ANIMAZIONE E ALTO CONTRASTO ---
-st.markdown("""
+# --- FUNZIONE PER CARICARE IL LOGO LOCALE ---
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# --- CSS CON ANIMAZIONE, LOGO E CENTRATURA ---
+# Assicurati che 'logo.png' sia nella stessa cartella di app.py
+try:
+    logo_base64 = get_base64_of_bin_file('logo.png')
+    logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="app-logo">'
+except FileNotFoundError:
+    logo_html = '<h1 style="color: #DAA520;">🎨</h1>' # Fallback se il logo non c'è
+
+st.markdown(f"""
 <style>
     /* Sfondo animato: Muro di mattoni sfocato */
-    .stApp {
+    .stApp {{
         background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), 
                     url('https://www.transparenttextures.com/patterns/brick-wall.png');
-        background-color: #FFFDD0; /* Il tuo bianco panna di base */
+        background-color: #FFFDD0;
         background-attachment: fixed;
         animation: moveBackground 40s linear infinite;
-    }
+    }}
 
-    @keyframes moveBackground {
-        from { background-position: 0 0; }
-        to { background-position: 500px 1000px; }
-    }
+    @keyframes moveBackground {{
+        from {{ background-position: 0 0; }}
+        to {{ background-position: 500px 1000px; }}
+    }}
 
     /* Sfocatura dello sfondo tramite un overlay */
-    .stApp::before {
+    .stApp::before {{
         content: "";
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
-        backdrop-filter: blur(4px); /* Sfocatura del muro */
+        backdrop-filter: blur(4px);
         z-index: -1;
-    }
+    }}
+
+    /* Centratura del contenuto principale */
+    .block-container {{
+        max-width: 800px;
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        margin: auto;
+        background-color: rgba(255, 253, 208, 0.6); /* Sfondo panna semi-trasparente per il contenuto */
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }}
+
+    /* Stile per il Logo personalizzato */
+    .logo-container {{
+        text-align: center;
+        margin-bottom: 20px;
+    }}
+    .app-logo {{
+        max-height: 100px; /* Regola l'altezza del logo */
+        width: auto;
+    }}
 
     /* ALTO CONTRASTO PER LE SCRITTE */
-    h1, h2, h3, h4, p, label, .stMarkdown {
-        color: #000000 !important; /* Nero puro per contrasto massimo */
+    h1, h2, h3, h4, p, label, .stMarkdown {{
+        color: #000000 !important;
         font-weight: 800 !important;
-    }
+    }}
 
-    h1 { 
+    h1 {{ 
         font-family: 'Bungee', cursive; 
         color: #DAA520 !important; 
-        text-shadow: 2px 2px 0px #000; /* Bordo nero per leggibilità */
-    }
+        text-shadow: 2px 2px 0px #000;
+        text-align: center;
+    }}
 
     /* Box Info Report (Semi-trasparente per vedere il muro) */
-    .spray-info-box {
+    .spray-info-box {{
         background-color: rgba(245, 245, 220, 0.9);
         border: 2px solid #000;
         border-left: 10px solid #FFD700;
@@ -61,34 +98,31 @@ st.markdown("""
         color: #000;
     }
 
-    /* Slider e Widget */
-    .stSlider [data-baseweb="slider"] { margin-bottom: 20px; }
-    
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] {
+    .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
+    .stTabs [data-baseweb="tab"] {{
         background-color: rgba(0,0,0,0.1);
         border-radius: 8px 8px 0 0;
         color: #000 !important;
         font-weight: bold;
-    }
-    .stTabs [aria-selected="true"] {
+    }}
+    .stTabs [aria-selected="true"] {{
         background-color: #FFD700 !important;
         border: 2px solid #000 !important;
-    }
+    }}
 
     /* Pulsante Genera */
-    .stButton>button {
+    .stButton>button {{
         background: #FFD700 !important;
         color: black !important;
         border: 2px solid #000 !important;
         box-shadow: 4px 4px 0px #000;
-    }
+    }}
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Funzioni Core
+# 2. Funzioni Core (Logica Invariata)
 # ==========================================
 
 def apply_bridges_and_crosses(mask, b_len, b_thick, cross_size):
@@ -144,6 +178,8 @@ def generate_zip(project):
 # 3. Flusso Applicazione
 # ==========================================
 
+# Visualizzazione del Logo centrato
+st.markdown(f'<div class="logo-container">{logo_html}</div>', unsafe_allow_html=True)
 st.title("🌈 Chroma Stencil Lab")
 
 tab_editor, tab_saved = st.tabs(["🏗️ EDITOR PROGETTO", "💾 ARCHIVIO SALVATI"])
