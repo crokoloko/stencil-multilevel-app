@@ -1,6 +1,7 @@
 import streamlit as st
 import cv2
 import numpy as np
+import zipfile
 from io import BytesIO
 
 # ==========================================
@@ -8,7 +9,6 @@ from io import BytesIO
 # ==========================================
 st.set_page_config(page_title="Chroma Stencil Lab PRO", layout="centered")
 
-# Inizializzazione memoria salvataggi
 if 'saved_projects' not in st.session_state:
     st.session_state.saved_projects = []
 
@@ -16,14 +16,13 @@ st.markdown("""
 <style>
     .stApp { background-color: #0d1117; color: #e6edf3; }
     h1 { font-family: 'Bungee', cursive; color: #FFD700 !important; text-align: center; }
-    .spray-info-box { background-color: #161b22; border-left: 8px solid #FFD700; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     .stButton>button { width: 100%; border-radius: 10px; font-weight: bold; }
-    .save-btn>div>button { background-color: #238636 !important; color: white !important; border: none !important; }
+    .stTabs [aria-selected="true"] { background-color: #FFD700 !important; color: black !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Funzioni Core
+# 2. Funzioni Core (Logica Invariata)
 # ==========================================
 
 def apply_bridges_and_crosses(mask, b_len, b_thick, cross_size):
@@ -61,23 +60,43 @@ def create_preview(masks, colors):
         canvas = cv2.add(canvas, blended)
     return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
 
+# --- NUOVA FUNZIONE: Generatore ZIP ---
+def generate_zip(project):
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        # 1. Salva Anteprima
+        preview_bgr = cv2.cvtColor(project['preview'], cv2.COLOR_RGB2BGR)
+        _, prev_img = cv2.imencode(".png", preview_bgr)
+        z.writestr("00_anteprima_finale.png", prev_img.tobytes())
+        
+        # 2. Salva Strati
+        color_summary = "LISTA COLORI BOMBOLETTE:\n"
+        for i, mask in enumerate(project['masks']):
+            _, m_img = cv2.imencode(".png", mask)
+            filename = f"strato_{i+1}_colore_{project['colors'][i].replace('#','')}.png"
+            z.writestr(filename, m_img.tobytes())
+            color_summary += f"Strato {i+1}: {project['colors'][i]}\n"
+        
+        # 3. Salva Info Colori
+        z.writestr("info_colori.txt", color_summary)
+        
+    return buf.getvalue()
+
 # ==========================================
-# 3. Struttura Menu principale
+# 3. Struttura App
 # ==========================================
 
 st.title("🌈 Chroma Stencil Lab")
 
-# Navigazione principale
-main_tab_editor, main_tab_saved = st.tabs(["🏗️ EDITOR PROGETTO", "💾 SALVATI"])
+tab_editor, tab_saved = st.tabs(["🏗️ EDITOR PROGETTO", "💾 ARCHIVIO SALVATI"])
 
-with main_tab_editor:
+with tab_editor:
     up_file = st.file_uploader("Carica immagine", type=["jpg", "png", "jpeg"])
     
     if up_file:
-        file_bytes = np.frombuffer(up_file.read(), np.uint8)
-        img = cv2.imdecode(file_bytes, 1)
+        img = cv2.imdecode(np.frombuffer(up_file.read(), np.uint8), 1)
         
-        with st.expander("⚙️ Parametri Tecnici", expanded=False):
+        with st.expander("⚙️ Parametri Tecnici"):
             c1, c2 = st.columns(2)
             n_layers = c1.slider("Strati", 2, 8, 4)
             b_len = c1.slider("Ponti", 10, 80, 30)
@@ -85,67 +104,57 @@ with main_tab_editor:
             cross_size = c2.slider("Crocette", 10, 50, 20)
 
         if st.button("✨ ELABORA STENCIL"):
-            # Processing
+            # K-Means
             img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
             data = img_lab.reshape((-1, 3)).astype(np.float32)
             _, label, centers = cv2.kmeans(data, n_layers, None, (cv2.TERM_CRITERIA_EPS+20, 20, 1.0), 10, cv2.KMEANS_RANDOM_CENTERS)
             centers = np.uint8(centers)
             quantized_lab = centers[label.flatten()].reshape((img_lab.shape))
 
-            masks = []
-            hex_colors = []
+            masks, hex_colors = [], []
             for i in range(n_layers):
                 m = cv2.inRange(quantized_lab, centers[i], centers[i])
                 masks.append(apply_bridges_and_crosses(m, b_len, b_thick, cross_size))
                 rgb = cv2.cvtColor(np.uint8([[centers[i]]]), cv2.COLOR_LAB2RGB)[0][0]
                 hex_colors.append('#%02x%02x%02x' % tuple(rgb))
             
-            # Sub-menu Risultati
-            tab_prev, tab_cuts = st.tabs(["🌌 ANTEPRIMA URBAN", "✂️ STRATI DA RITAGLIARE"])
+            # Anteprima e Salvataggio
+            preview_img = create_preview(masks, hex_colors)
+            st.image(preview_img, use_container_width=True, caption="Anteprima Urban")
             
-            with tab_prev:
-                preview_img = create_preview(masks, hex_colors)
-                st.image(preview_img, use_container_width=True)
-                
-                # FUNZIONE SALVA
-                st.markdown('<div class="save-btn">', unsafe_allow_html=True)
-                if st.button("💾 SALVA PROGETTO NELL'ARCHIVIO"):
-                    project = {
-                        "name": f"Progetto {len(st.session_state.saved_projects)+1}",
-                        "preview": preview_img,
-                        "masks": masks,
-                        "colors": hex_colors
-                    }
-                    st.session_state.saved_projects.append(project)
-                    st.success("Progetto salvato nella sezione 'SALVATI'!")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            with tab_cuts:
-                for i in range(n_layers):
-                    col_v, col_d = st.columns([2, 1])
-                    col_v.image(masks[i], caption=f"Strato {i+1}")
-                    _, buf = cv2.imencode(".png", masks[i])
-                    col_d.download_button(f"Scarica L{i+1}", buf.tobytes(), f"layer_{i+1}.png", key=f"d_ed_{i}")
+            if st.button("💾 SALVA NELL'ARCHIVIO"):
+                project = {
+                    "name": f"Stencil_{len(st.session_state.saved_projects)+1}",
+                    "preview": preview_img,
+                    "masks": masks,
+                    "colors": hex_colors
+                }
+                st.session_state.saved_projects.append(project)
+                st.success("Salvato! Controlla la scheda 'ARCHIVIO SALVATI'")
 
 # ==========================================
-# 4. Sezione SALVATI
+# 4. Sezione Salvati con Export ZIP
 # ==========================================
-with main_tab_saved:
+with tab_saved:
     if not st.session_state.saved_projects:
-        st.info("Nessun progetto salvato. Crea uno stencil e clicca su 'Salva'!")
+        st.info("Nessun progetto nell'archivio.")
     else:
         for idx, proj in enumerate(st.session_state.saved_projects):
-            with st.expander(f"📁 {proj['name']} - {len(proj['masks'])} strati"):
-                col_p, col_m = st.columns([1, 1])
-                with col_p:
-                    st.subheader("Anteprima")
+            with st.expander(f"📁 {proj['name']} ({len(proj['masks'])} strati)"):
+                col_a, col_b = st.columns([1, 1])
+                with col_a:
                     st.image(proj['preview'], use_container_width=True)
-                with col_m:
-                    st.subheader("Download Strati")
-                    for i, m in enumerate(proj['masks']):
-                        _, b = cv2.imencode(".png", m)
-                        st.download_button(f"Download Strato {i+1} ({proj['colors'][i]})", b.tobytes(), f"{proj['name']}_L{i+1}.png", key=f"sav_{idx}_{i}")
-                
-                if st.button(f"🗑️ Elimina {proj['name']}", key=f"del_{idx}"):
-                    st.session_state.saved_projects.pop(idx)
-                    st.rerun()
+                with col_b:
+                    st.write("📦 **Pacchetto Completo**")
+                    zip_data = generate_zip(proj)
+                    st.download_button(
+                        label=f"📥 SCARICA TUTTO (.ZIP)",
+                        data=zip_data,
+                        file_name=f"{proj['name']}_package.zip",
+                        mime="application/zip",
+                        key=f"zip_{idx}"
+                    )
+                    st.markdown("---")
+                    if st.button(f"🗑️ Elimina", key=f"del_{idx}"):
+                        st.session_state.saved_projects.pop(idx)
+                        st.rerun()
