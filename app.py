@@ -11,10 +11,10 @@ from io import BytesIO
 st.set_page_config(page_title="Chroma Stencil Lab PRO", layout="centered")
 
 # Inizializzazione variabili di sessione
-if 'saved_projects' not in st.session_state:
-    st.session_state.saved_projects = []
 if 'current_masks' not in st.session_state:
     st.session_state.current_masks = None
+if 'current_colors' not in st.session_state:
+    st.session_state.current_colors = None
 
 def get_base64_logo(file_path):
     try:
@@ -57,7 +57,7 @@ st.markdown(f"""
         padding: 20px !important;
     }}
 
-    /* Font Street */
+    /* Font Street per i Titoli */
     h1, h2, h3, h4 {{
         font-family: 'Bungee', cursive !important;
         color: #FFD700 !important;
@@ -71,7 +71,7 @@ st.markdown(f"""
         text-shadow: 2px 2px 4px #000;
     }}
 
-    /* Fix Uploader */
+    /* Fix Uploader Street Style */
     [data-testid="stFileUploader"] {{
         background-color: rgba(0, 0, 0, 0.5) !important;
         border: 2px dashed #FFD700 !important;
@@ -147,17 +147,6 @@ def create_preview(masks, colors):
         canvas = cv2.add(canvas, blended)
     return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
 
-def generate_zip(project):
-    buf = BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        prev_bgr = cv2.cvtColor(project['preview'], cv2.COLOR_RGB2BGR)
-        _, p_img = cv2.imencode(".png", prev_bgr)
-        z.writestr("anteprima.png", p_img.tobytes())
-        for i, m in enumerate(project['masks']):
-            _, m_img = cv2.imencode(".png", m)
-            z.writestr(f"strato_{i+1}_{project['colors'][i].replace('#','')}.png", m_img.tobytes())
-    return buf.getvalue()
-
 # ==========================================
 # 3. Interfaccia
 # ==========================================
@@ -183,7 +172,7 @@ with tab_ed:
             c_s = c2.slider("Crocette", 10, 50, 20)
 
         if st.button("✨ ELABORA STENCIL"):
-            with st.spinner('Calcolo in corso...'):
+            with st.spinner('Elaborazione in corso...'):
                 img_lab = cv2.cvtColor(img_raw, cv2.COLOR_BGR2LAB)
                 data = img_lab.reshape((-1, 3)).astype(np.float32)
                 _, label, centers = cv2.kmeans(data, n_l, None, (cv2.TERM_CRITERIA_EPS+20, 20, 1.0), 10, cv2.KMEANS_RANDOM_CENTERS)
@@ -193,6 +182,7 @@ with tab_ed:
                 masks, colors = [], []
                 for i in range(n_l):
                     m = cv2.inRange(q_lab, centers[i], centers[i])
+                    # Applichiamo logica ponti e crocette
                     masks.append(apply_stencil_logic(cv2.bitwise_not(m), b_l, b_t, c_s))
                     rgb = cv2.cvtColor(np.uint8([[centers[i]]]), cv2.COLOR_LAB2RGB)[0][0]
                     colors.append('#%02x%02x%02x' % tuple(rgb))
@@ -204,55 +194,48 @@ with tab_ed:
                 with t_prev:
                     p_img = create_preview(masks, colors)
                     st.image(p_img, use_container_width=True)
-                    if st.button("💾 SALVA NEI PREFERITI"):
-                        st.session_state.saved_projects.append({"name": f"Project_{len(st.session_state.saved_projects)+1}", "preview": p_img, "masks": masks, "colors": colors})
-                        st.success("Salvato!")
                 with t_lay:
                     l_tabs = st.tabs([f"{i+1}" for i in range(n_l)])
                     for i, lt in enumerate(l_tabs):
                         with lt:
                             st.image(masks[i], use_container_width=True)
                             _, buf = cv2.imencode(".png", masks[i])
-                            st.download_button(f"Download {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"dl_{i}")
+                            st.download_button(f"Scarica {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"dl_{i}")
 
 with tab_info:
-    # --- IA GENERATOR ---
-    st.markdown("## 🤖 IA STREET GENERATOR")
-    with st.container():
-        st.write("Genera graffiti complessi con l'IA (Simulazione)")
-        c1, c2 = st.columns([2,1])
-        prompt = c1.text_input("Testo del Graffito", "STREET ART")
-        style = c2.selectbox("Stile", ["Wildstyle", "Bubble", "Stencil Art"])
-        if st.button("🚀 GENERA CON IA"):
-            st.info(f"Sto creando un pezzo in stile {style} per '{prompt}'...")
-            st.warning("⚠️ Per attivare la generazione reale, collega le API di DALL-E o Stable Diffusion.")
-
-    st.markdown("---")
-
-    # --- CALCOLATORE BOMBOLETTE ---
-    st.markdown("## 🎨 CALCOLATORE BOMBOLETTE")
+    # --- 1. CALCOLATORE BOMBOLETTE (In cima) ---
+    st.markdown("## 🎨 CALCOLATORE BOMBOLETTE (CAN BUDGET)")
     if st.session_state.current_masks:
+        st.write("Preventivo spray per l'ultimo stencil generato:")
         for i, m in enumerate(st.session_state.current_masks):
+            # Calcolo basato sui pixel neri (vernice da spruzzare)
             coverage = (np.sum(m == 0) / m.size)
             cans = max(0.2, round(coverage * 1.5, 1))
             col_a, col_b = st.columns([1, 4])
             col_a.color_picker(f"L{i+1}", st.session_state.current_colors[i], key=f"info_c_{i}", disabled=True)
-            col_b.write(f"Servono circa **{cans}** bombolette (400ml)")
+            col_b.write(f"Quantità stimata: **{cans}** bombolette (400ml)")
     else:
-        st.write("Carica ed elabora una foto nell'Editor per vedere il preventivo spray!")
+        st.info("💡 Suggerimento: Elabora una foto nell'Editor per sbloccare il preventivo delle bombolette!")
 
     st.markdown("---")
 
-    # --- ARCHIVIO (EX SALVATI) ---
-    st.markdown("## 💾 I TUOI SALVATI")
-    if not st.session_state.saved_projects:
-        st.write("Nessun progetto in archivio.")
-    else:
-        for idx, p in enumerate(st.session_state.saved_projects):
-            with st.expander(f"📁 {p['name']}"):
-                st.image(p['preview'], use_container_width=True)
-                z_data = generate_zip(p)
-                st.download_button("📥 SCARICA ZIP", z_data, f"{p['name']}.zip", key=f"zip_{idx}")
-                if st.button("🗑️ Elimina", key=f"del_{idx}"):
-                    st.session_state.saved_projects.pop(idx); st.rerun()
+    # --- 2. IA STREET GENERATOR (Sotto il calcolatore) ---
+    st.markdown("## 🤖 IA STREET GENERATOR")
+    with st.container():
+        st.write("Genera bozze di graffiti complessi con l'IA (Simulazione)")
+        c1, c2 = st.columns([2,1])
+        prompt_in = c1.text_input("Testo del Graffito", "STREET ART")
+        style_in = c2.selectbox("Stile", ["Wildstyle", "Bubble", "Stencil Art"])
+        if st.button("🚀 GENERA CON IA"):
+            st.info(f"Sto disegnando un pezzo in stile {style_in} per '{prompt_in}'...")
+            st.warning("⚠️ Per attivare la generazione reale, collega le API di DALL-E 3 o Stable Diffusion nel codice.")
 
+    st.markdown("---")
+
+    # --- 3. CONSIGLI TECNICI ---
+    st.markdown("## 📚 TIPS PER IL MURO")
+    st.write("""
+    - **Ponti:** Se le 'isole' delle lettere cadono, usa del nastro carta sottile per tenerle in posizione.
+    - **Distanza:** Spruzza a scatti brevi da circa 15-20cm per evitare colature.
+    - **Ordine:** Inizia sempre dallo strato più chiaro e finisci con quello più scuro.
+    """)
