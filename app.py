@@ -10,7 +10,6 @@ from io import BytesIO
 # ==========================================
 st.set_page_config(page_title="Chroma Stencil Lab PRO", layout="centered")
 
-# Inizializzazione variabili di sessione
 if 'current_masks' not in st.session_state:
     st.session_state.current_masks = None
 if 'current_colors' not in st.session_state:
@@ -25,7 +24,7 @@ def get_base64_logo(file_path):
 
 logo_b64 = get_base64_logo("logo.png")
 
-# CSS Revisionato (Doppie graffe {{ }} per evitare errori Python)
+# CSS: News Ticker + Sfondo Animato + Street Font
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Bungee&display=swap');
@@ -37,6 +36,7 @@ st.markdown(f"""
                     url('https://www.transparenttextures.com/patterns/brick-wall.png');
         background-color: #0a192f;
         background-attachment: fixed;
+        background-blend-mode: overlay, overlay, normal, normal;
         animation: moveBackground 70s linear infinite, lampFlicker 10s ease-in-out infinite alternate;
     }}
 
@@ -51,13 +51,35 @@ st.markdown(f"""
         100% {{ filter: brightness(0.9); }}
     }}
 
+    /* NEWS TICKER ANIMATION */
+    .ticker-wrap {{
+        width: 100%;
+        overflow: hidden;
+        background-color: rgba(255, 215, 0, 0.9); /* Giallo Street */
+        border: 2px solid #000;
+        margin-bottom: 20px;
+        padding: 5px 0;
+    }}
+    .ticker {{
+        display: inline-block;
+        white-space: nowrap;
+        padding-right: 100%;
+        animation: ticker 30s linear infinite;
+        font-family: 'Bungee', cursive;
+        color: #000;
+        font-size: 1.2rem;
+    }}
+    @keyframes ticker {{
+        0% {{ transform: translate3d(100%, 0, 0); }}
+        100% {{ transform: translate3d(-100%, 0, 0); }}
+    }}
+
     .block-container {{
         max-width: 850px;
         background-color: transparent !important;
         padding: 20px !important;
     }}
 
-    /* Font Street per i Titoli */
     h1, h2, h3, h4 {{
         font-family: 'Bungee', cursive !important;
         color: #FFD700 !important;
@@ -71,18 +93,10 @@ st.markdown(f"""
         text-shadow: 2px 2px 4px #000;
     }}
 
-    /* Fix Uploader Street Style */
-    [data-testid="stFileUploader"] {{
-        background-color: rgba(0, 0, 0, 0.5) !important;
-        border: 2px dashed #FFD700 !important;
-        border-radius: 15px !important;
-        padding: 20px !important;
-    }}
-
     .logo-img {{
         display: block;
-        margin: 0 auto 30px auto;
-        max-height: 250px;
+        margin: 0 auto 10px auto;
+        max-height: 200px;
         filter: drop-shadow(2px 4px 6px #000);
     }}
 
@@ -103,7 +117,6 @@ st.markdown(f"""
         border: 2px solid #000 !important;
         box-shadow: 4px 4px 0px #000;
         border-radius: 12px;
-        font-family: 'Bungee', sans-serif;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -134,8 +147,7 @@ def apply_stencil_logic(mask, b_len, b_thick, cross_size):
 def create_preview(masks, colors):
     h, w = masks[0].shape
     bg = np.full((h, w, 3), 60, dtype=np.uint8)
-    noise = np.random.normal(0, 15, (h, w, 3)).astype(np.int16)
-    canvas = np.clip(bg.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    canvas = bg.copy()
     for i, m in enumerate(masks):
         rgb = tuple(int(colors[i].lstrip('#')[j:j+2], 16) for j in (0, 2, 4))
         bgr = (rgb[2], rgb[1], rgb[0])
@@ -151,10 +163,20 @@ def create_preview(masks, colors):
 # 3. Interfaccia
 # ==========================================
 
+# Logo
 if logo_b64:
     st.markdown(f'<img src="data:image/png;base64,{logo_b64}" class="logo-img">', unsafe_allow_html=True)
-else:
-    st.title("🌈 CHROMA STENCIL LAB")
+
+# NEWS TICKER (Lercio Style)
+news = [
+    "LERCIO: Scoperto stencil talmente realistico che il muro ha chiesto il permesso di soggiorno",
+    "LERCIO: Ragazzo spruzza vernice giallo oro: scambiato per il Re Mida della Garbatella",
+    "LERCIO: Studio shock: gli stencil non coprono i debiti, solo le crepe nei muri",
+    "LERCIO: Nuovo spray al gusto pizza: i writer ora mangiano direttamente dai muri",
+    "LERCIO: Graffiti IA generano stencil di politici onesti: l'app va in crash per mancanza di dati"
+]
+ticker_text = " • ".join(news)
+st.markdown(f'<div class="ticker-wrap"><div class="ticker">{ticker_text}</div></div>', unsafe_allow_html=True)
 
 tab_ed, tab_info = st.tabs(["🏗️ EDITOR STENCIL", "⚡ INFO & TOOLS"])
 
@@ -172,7 +194,7 @@ with tab_ed:
             c_s = c2.slider("Crocette", 10, 50, 20)
 
         if st.button("✨ ELABORA STENCIL"):
-            with st.spinner('Elaborazione in corso...'):
+            with st.spinner('Calcolo in corso...'):
                 img_lab = cv2.cvtColor(img_raw, cv2.COLOR_BGR2LAB)
                 data = img_lab.reshape((-1, 3)).astype(np.float32)
                 _, label, centers = cv2.kmeans(data, n_l, None, (cv2.TERM_CRITERIA_EPS+20, 20, 1.0), 10, cv2.KMEANS_RANDOM_CENTERS)
@@ -182,7 +204,6 @@ with tab_ed:
                 masks, colors = [], []
                 for i in range(n_l):
                     m = cv2.inRange(q_lab, centers[i], centers[i])
-                    # Applichiamo logica ponti e crocette
                     masks.append(apply_stencil_logic(cv2.bitwise_not(m), b_l, b_t, c_s))
                     rgb = cv2.cvtColor(np.uint8([[centers[i]]]), cv2.COLOR_LAB2RGB)[0][0]
                     colors.append('#%02x%02x%02x' % tuple(rgb))
@@ -203,39 +224,28 @@ with tab_ed:
                             st.download_button(f"Scarica {i+1}", buf.tobytes(), f"L{i+1}.png", key=f"dl_{i}")
 
 with tab_info:
-    # --- 1. CALCOLATORE BOMBOLETTE (In cima) ---
     st.markdown("## 🎨 CALCOLATORE BOMBOLETTE (CAN BUDGET)")
     if st.session_state.current_masks:
-        st.write("Preventivo spray per l'ultimo stencil generato:")
         for i, m in enumerate(st.session_state.current_masks):
-            # Calcolo basato sui pixel neri (vernice da spruzzare)
             coverage = (np.sum(m == 0) / m.size)
             cans = max(0.2, round(coverage * 1.5, 1))
             col_a, col_b = st.columns([1, 4])
             col_a.color_picker(f"L{i+1}", st.session_state.current_colors[i], key=f"info_c_{i}", disabled=True)
-            col_b.write(f"Quantità stimata: **{cans}** bombolette (400ml)")
+            col_b.write(f"Quantità: **{cans}** bombolette (400ml)")
     else:
-        st.info("💡 Suggerimento: Elabora una foto nell'Editor per sbloccare il preventivo delle bombolette!")
+        st.info("💡 Suggerimento: Elabora una foto nell'Editor per sbloccare il preventivo!")
 
     st.markdown("---")
 
-    # --- 2. IA STREET GENERATOR (Sotto il calcolatore) ---
     st.markdown("## 🤖 IA STREET GENERATOR")
-    with st.container():
-        st.write("Genera bozze di graffiti complessi con l'IA (Simulazione)")
-        c1, c2 = st.columns([2,1])
-        prompt_in = c1.text_input("Testo del Graffito", "STREET ART")
-        style_in = c2.selectbox("Stile", ["Wildstyle", "Bubble", "Stencil Art"])
-        if st.button("🚀 GENERA CON IA"):
-            st.info(f"Sto disegnando un pezzo in stile {style_in} per '{prompt_in}'...")
-            st.warning("⚠️ Per attivare la generazione reale, collega le API di DALL-E 3 o Stable Diffusion nel codice.")
+    st.write("Genera graffiti complessi con l'IA (Simulazione)")
+    c1, c2 = st.columns([2,1])
+    prompt_in = c1.text_input("Testo del Graffito", "STREET ART")
+    style_in = c2.selectbox("Stile", ["Wildstyle", "Bubble", "Stencil Art"])
+    if st.button("🚀 GENERA CON IA"):
+        st.info(f"Sto disegnando un pezzo in stile {style_in} per '{prompt_in}'...")
 
     st.markdown("---")
 
-    # --- 3. CONSIGLI TECNICI ---
     st.markdown("## 📚 TIPS PER IL MURO")
-    st.write("""
-    - **Ponti:** Se le 'isole' delle lettere cadono, usa del nastro carta sottile per tenerle in posizione.
-    - **Distanza:** Spruzza a scatti brevi da circa 15-20cm per evitare colature.
-    - **Ordine:** Inizia sempre dallo strato più chiaro e finisci con quello più scuro.
-    """)
+    st.write("- **Ponti:** Usa nastro carta se le isole cadono.\n- **Distanza:** 15-20cm dal muro.\n- **Ordine:** Dal chiaro allo scuro.")
